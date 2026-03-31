@@ -157,11 +157,10 @@ void _AutoTakeoff::run()
     
     // aircraft stays in landed state until vertical movement is detected or 90% throttle is reached
     if (copter.ap.land_complete) {
-        #if SITL_ENABLED
-        // 在模拟器环境下，只要进入了此函数且已解锁，就强制认为已离地
+        #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+        // 专门针对 SITL 的暴力离地逻辑
         if (motors->armed() && copter.ap.auto_armed) {
              copter.set_land_complete(false);
-             // 顺便打印一行日志，方便你在控制台看到
              gcs().send_text(MAV_SEVERITY_INFO, "SITL: Forced takeoff bypass");
         }
         #endif
