@@ -157,13 +157,11 @@ void _AutoTakeoff::run()
     
     // aircraft stays in landed state until vertical movement is detected or 90% throttle is reached
     if (copter.ap.land_complete) {
-        #if CONFIG_HAL_BOARD == HAL_BOARD_SITL
         // 专门针对 SITL 的暴力离地逻辑
         if (motors->armed() && copter.ap.auto_armed) {
              copter.set_land_complete(false);
              gcs().send_text(MAV_SEVERITY_INFO, "SITL: Forced takeoff bypass");
         }
-        #endif
         // send throttle to attitude controller with angle boost
         float throttle = constrain_float(copter.attitude_control->get_throttle_in() + copter.G_Dt / copter.g2.takeoff_throttle_slew_time, 0.0, 1.0);
         copter.attitude_control->set_throttle_out(throttle, true, 0.0);
