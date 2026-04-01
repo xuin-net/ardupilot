@@ -984,7 +984,7 @@ Copter::Copter(void)
     flight_modes(&g.flight_mode1),
     pos_variance_filt(FS_EKF_FILT_DEFAULT),
     vel_variance_filt(FS_EKF_FILT_DEFAULT),
-    flightmode(&mode_stabilize),
+    flightmode(&mode_loiter),
     simple_cos_yaw(1.0f),
     super_simple_cos_yaw(1.0),
     land_accel_ef_filter(LAND_DETECTOR_ACCEL_LPF_CUTOFF),
