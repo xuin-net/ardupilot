@@ -35,14 +35,14 @@ void Copter::auto_disarm_check()
         disarm_delay_ms /= 2;
 #endif
     } else {
-        // bool sprung_throttle_stick = (g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK) != 0;
-        // bool thr_low;
-        // if (flightmode->has_manual_throttle() || !sprung_throttle_stick) {
-        //     thr_low = ap.throttle_zero;
-        // } else {
-        //     float deadband_top = get_throttle_mid() + g.throttle_deadzone;
-        //     thr_low = channel_throttle->get_control_in() <= deadband_top;
-        // }
+        bool sprung_throttle_stick = (g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK) != 0;
+        bool thr_low;
+        if (flightmode->has_manual_throttle() || !sprung_throttle_stick) {
+            thr_low = ap.throttle_zero;
+        } else {
+            float deadband_top = get_throttle_mid() + g.throttle_deadzone;
+            thr_low = channel_throttle->get_control_in() <= deadband_top;
+        }
 
         // if (!thr_low || !ap.land_complete) {
         //     // Reset timer whenever throttle is not low or vehicle is not landed.
