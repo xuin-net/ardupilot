@@ -51,6 +51,23 @@ void Copter::auto_disarm_check()
         if (!ap.land_complete) {
             // 如果没落地，就一直重置计时器，不让它进入下面的闭锁判断
             auto_disarm_begin = tnow_ms;
+        } else {
+            // 2. 飞机已经落地
+            if (flightmode->has_manual_throttle()) {
+                // A. 处于手动飞行模式 (如 Stabilize, AltHold, Loiter)
+                if (thr_low) {
+                    // 油门拉到了最低，强制闭锁延迟设为 1 秒 (1000毫秒)
+                    disarm_delay_ms = 1000;
+                } else {
+                    // 油门没有拉到最低，重置计时器。
+                    // 这样可以确保必须是【连续 1 秒】油门最低才会触发闭锁
+                    auto_disarm_begin = tnow_ms;
+                }
+            } else {
+                // B. 处于自动飞行模式 (如 RTL, LAND, AUTO 等)
+                // 不需要管油门杆位，直接走默认的降落闭锁时间 (默认通常是 2 秒)
+                // 这里不重置计时器，让 tnow_ms - auto_disarm_begin 正常累加
+            }
         }
     }
 
