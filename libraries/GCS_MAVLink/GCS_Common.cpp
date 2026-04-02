@@ -533,11 +533,6 @@ void GCS_MAVLINK::send_distance_sensor()
 
 void GCS_MAVLINK::send_wk_selfcheck_state()
 {
-    // 检查负载空间，避免溢出导致串口卡死
-    if (!HAVE_PAYLOAD_SPACE(chan, WK_SELFCHK_STATE)) {
-        return;
-    }
-
     // 获取各传感器健康状态 (1为健康, 0为异常)
     uint8_t gps_h     = 1;
     uint8_t ahrs_h    = 1;
