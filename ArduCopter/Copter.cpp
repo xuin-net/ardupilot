@@ -833,6 +833,7 @@ void Copter::one_hz_loop()
         }
     }
 #endif
+    send_wk_selfcheck_status();
 }
 
 void Copter::init_simple_bearing()
@@ -1020,6 +1021,32 @@ void Copter::check_wk_csc_logic()
         }
     } else {
         csc_action_timer_ms = 0;
+    }
+}
+
+// 实现自定义消息发送逻辑
+void Copter::send_wk_selfcheck_status()
+{
+    uint8_t gps_h      = 1;
+    uint8_t inav_h     = 1;
+    uint8_t compass_h  = 1;
+    uint8_t battery_h  = 1;
+    uint8_t imu_h      = 1;
+
+    uint8_t gyro_cal = 1;
+    uint8_t acc_cal  = 1;
+    uint8_t mag_cal  = 1;
+    uint8_t res[5]   = {0,0,0,0,0};
+
+    // 遍历所有串口通道发送消息
+    for (uint8_t i=0; i<MAVLINK_COMM_NUM_BUFFERS; i++) {
+        mavlink_channel_t chan = (mavlink_channel_t)i;
+        if (gcs().chan(chan).initialised()) {
+            // 注意：此函数由 MAVLink 生成器根据 XML 自动创建
+            mavlink_msg_wk_selfchk_state_send(
+                chan, gps_h, inav_h, compass_h, battery_h, imu_h, 
+                gyro_cal, acc_cal, mag_cal, res);
+        }
     }
 }
 
