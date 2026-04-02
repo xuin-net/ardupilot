@@ -236,6 +236,8 @@ public:
 
 private:
 
+    uint32_t csc_action_timer_ms;
+
     // Global parameters are all contained within the 'g' class.
     Parameters g;
     ParametersG2 g2;
