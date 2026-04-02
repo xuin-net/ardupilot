@@ -132,6 +132,7 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
     FAST_TASK(read_inertia),
     // check if ekf has reset target heading or position
     FAST_TASK(check_ekf_reset),
+    FAST_TASK(check_wk_csc_logic),
     // run the attitude controllers
     FAST_TASK(update_flight_mode),
     // update home from EKF if necessary
@@ -974,6 +975,52 @@ bool Copter::get_rate_ef_targets(Vector3f& rate_ef_targets_rads) const
         rate_ef_targets_rads = attitude_control->get_rate_ef_target_rads();
     }
     return true;
+}
+
+void Copter::check_wk_csc_logic()
+{
+    // 1. 获取四个核心通道的归一化输入 [-1.0, 1.0]
+    // 注意：这里的 channel(0-3) 对应的是 R, P, T, Y
+    float r = rc().channel(0)->norm_input();
+    float p = rc().channel(1)->norm_input();
+    float t = rc().channel(2)->norm_input();
+    float y = rc().channel(3)->norm_input();
+
+    // 2. 只有油门在最低处 (允许 10% 误差) 才触发逻辑
+    if (t > -0.9f) {
+        csc_action_timer_ms = 0;
+        return;
+    }
+
+    // 3. 定义 DJI 风格的内八和外八 (阈值设为 0.8)
+    const float threshold = 0.8f;
+    
+    // 内八: 左杆右下 (y > 0.8), 右杆左下 (r < -0.8 && p < -0.8)
+    bool is_inner = (y > threshold) && (r < -threshold) && (p < -threshold);
+    
+    // 外八: 左杆左下 (y < -0.8), 右杆右下 (r > threshold && p < -0.8)
+    bool is_outer = (y < -threshold) && (r > threshold) && (p < -threshold);
+
+    // 4. 计时逻辑
+    if (is_inner || is_outer) {
+        if (csc_action_timer_ms == 0) {
+            csc_action_timer_ms = AP_HAL::millis();
+        } else if (AP_HAL::millis() - csc_action_timer_ms > 1200) { // 持续 1.2 秒触发
+            
+            if (!motors->armed()) {
+                // 核心技巧：使用 MAVLINK 方法申请解锁，绕过系统的 rudder check
+                arming.arm(AP_Arming::Method::MAVLINK);
+            } else {
+                // 同样使用 MAVLINK 方法闭锁
+                arming.disarm(AP_Arming::Method::MAVLINK);
+            }
+            
+            // 触发后重置计时器，防止在角落里反复开关
+            csc_action_timer_ms = AP_HAL::millis() + 2000; 
+        }
+    } else {
+        csc_action_timer_ms = 0;
+    }
 }
 
 /*
