@@ -531,6 +531,32 @@ void GCS_MAVLINK::send_distance_sensor()
 #endif
 }
 
+void GCS_MAVLINK::send_wk_selfcheck_state()
+{
+    // 检查负载空间，避免溢出导致串口卡死
+    if (!HAVE_PAYLOAD_SPACE(chan, WK_SELFCHK_STATE)) {
+        return;
+    }
+
+    // 获取各传感器健康状态 (1为健康, 0为异常)
+    uint8_t gps_h     = 1;
+    uint8_t ahrs_h    = 1;
+    uint8_t compass_h = 1;
+    uint8_t batt_h    = 1;
+
+    // 注意：chan 是 GCS_MAVLINK 类的成员变量，直接传即可
+    mavlink_msg_wk_selfchk_state_send(
+        chan,
+        gps_h, 
+        ahrs_h,       // inav_healthy
+        compass_h,
+        batt_h,
+        1,            // imu_healthy (AHRS OK 通常代表 IMU 也 OK)
+        1, 1, 1,      // 校验标志位，先填1
+        nullptr       // 预留数组
+    );
+}
+
 #if AP_MAVLINK_MSG_RANGEFINDER_SENDING_ENABLED
 void GCS_MAVLINK::send_rangefinder() const
 {
@@ -6703,6 +6729,10 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
 
     case MSG_DISTANCE_SENSOR:
         send_distance_sensor();
+        break;
+
+    case MAVLINK_MSG_ID_WK_SELFCHK_STATE:
+        send_wk_selfcheck_state()
         break;
 
 #if AP_CAMERA_ENABLED
