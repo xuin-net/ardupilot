@@ -73,7 +73,13 @@ void Copter::auto_disarm_check()
 
     // disarm once timer expires
     if ((tnow_ms-auto_disarm_begin) >= disarm_delay_ms) {
-        arming.disarm(AP_Arming::Method::DISARMDELAY);
+        // 尝试执行闭锁，并判断是否闭锁成功
+        if (arming.disarm(AP_Arming::Method::DISARMDELAY)) {
+            // 确保飞机静止在地面时，模式自动复位
+            if (flightmode->mode_number() != Mode::Number::LOITER) {
+                set_mode(Mode::Number::LOITER, ModeReason::MISSION_END);
+            }            
+        }
         auto_disarm_begin = tnow_ms;
     }
 }
