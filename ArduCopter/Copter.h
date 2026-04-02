@@ -235,9 +235,6 @@ public:
     Copter(void);
 
 private:
-
-    uint32_t csc_action_timer_ms;
-
     // Global parameters are all contained within the 'g' class.
     Parameters g;
     ParametersG2 g2;
@@ -733,9 +730,6 @@ private:
     void set_accel_throttle_I_from_pilot_throttle();
     float get_pilot_speed_dn_ms() const;
     void run_rate_controller_main();
-    
-    void check_wk_csc_logic();
-    void send_wk_selfcheck_status();
 
     // if AP_INERTIALSENSOR_FAST_SAMPLE_WINDOW_ENABLED
     struct RateControllerRates {
