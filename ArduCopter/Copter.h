@@ -733,6 +733,7 @@ private:
     void set_accel_throttle_I_from_pilot_throttle();
     float get_pilot_speed_dn_ms() const;
     void run_rate_controller_main();
+    void check_dji_csc_logic();
 
     // if AP_INERTIALSENSOR_FAST_SAMPLE_WINDOW_ENABLED
     struct RateControllerRates {
