@@ -1041,7 +1041,7 @@ void Copter::send_wk_selfcheck_status()
     // 遍历所有串口通道发送消息
     for (uint8_t i=0; i<MAVLINK_COMM_NUM_BUFFERS; i++) {
         mavlink_channel_t chan = (mavlink_channel_t)i;
-        if (gcs().chan(chan) != nullptr && gcs().chan(chan)->initialised()) {
+        if (gcs().chan(chan) != nullptr && gcs().chan(chan)->active()) {
             // 注意：此函数由 MAVLink 生成器根据 XML 自动创建
             mavlink_msg_wk_selfchk_state_send(
                 chan, gps_h, inav_h, compass_h, battery_h, imu_h, 
