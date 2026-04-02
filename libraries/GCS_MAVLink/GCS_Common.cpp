@@ -2041,6 +2041,14 @@ GCS_MAVLINK::update_receive(uint32_t max_time_us)
         }
     }
 
+    static uint32_t last_wk_check_ms = 0;
+    if (tnow - last_wk_check_ms > 1000) { // 每 1000ms 执行一次
+        if (HAVE_PAYLOAD_SPACE(chan, WK_SELFCHK_STATE)) { // 检查当前端口缓冲区
+            send_wk_selfcheck_state(); 
+            last_wk_check_ms = tnow;
+        }
+    }
+
 #if HAL_LOGGING_ENABLED
     // consider logging mavlink stats:
     if (is_active() || is_streaming()) {
@@ -6731,7 +6739,8 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
         send_distance_sensor();
         break;
 
-    case MAVLINK_MSG_ID_WK_SELFCHK_STATE:
+    case MSG_WK_SELFCHECK:
+        CHECK_PAYLOAD_SIZE(WK_SELFCHK_STATE);
         send_wk_selfcheck_state()
         break;
 
