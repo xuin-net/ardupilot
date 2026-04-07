@@ -552,6 +552,21 @@ void GCS_MAVLINK::send_wk_selfcheck_state()
     );
 }
 
+void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
+{
+    mavlink_msg_wk_heartbeat_ext_new_rule_send(
+        chan,
+        MAV_TYPE_QUADROTOR, 
+        0,0,0,
+        71,0,
+        MAV_AUTOPILOT_ARDUPILOTMEGA,
+        MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+        MAV_STATE_STANDBY,
+        MAVLINK_VERSION,
+        "",0,"",1,1,0
+    );
+}
+
 #if AP_MAVLINK_MSG_RANGEFINDER_SENDING_ENABLED
 void GCS_MAVLINK::send_rangefinder() const
 {
@@ -2040,6 +2055,7 @@ GCS_MAVLINK::update_receive(uint32_t max_time_us)
     if (tnow - last_wk_check_ms > 1000) { // 每 1000ms 执行一次
         if (HAVE_PAYLOAD_SPACE(chan, WK_SELFCHK_STATE)) { // 检查当前端口缓冲区
             send_wk_selfcheck_state(); 
+            send_wk_heartabat_ext_new_rule();
             last_wk_check_ms = tnow;
         }
     }
@@ -6732,11 +6748,6 @@ bool GCS_MAVLINK::try_send_message(const enum ap_message id)
 
     case MSG_DISTANCE_SENSOR:
         send_distance_sensor();
-        break;
-
-    case MSG_WK_SELFCHECK:
-        CHECK_PAYLOAD_SIZE(WK_SELFCHK_STATE);
-        send_wk_selfcheck_state()
         break;
 
 #if AP_CAMERA_ENABLED
