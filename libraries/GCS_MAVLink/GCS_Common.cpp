@@ -555,7 +555,7 @@ void GCS_MAVLINK::send_wk_selfcheck_state()
 void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
 {
     uint8_t empty_user_name[32] = {0};
-    uint8_t empty_product_id[30] = {0};
+    uint8_t product_id[30] = "WKAU8888888888888888";
 
     mavlink_msg_wk_heartbeat_ext_new_rule_send(
         chan,
@@ -565,8 +565,8 @@ void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
         0, 0, MAVLINK_VERSION, 0,
         71, 0, 0, 0,
         empty_user_name,
-        0,
-        empty_product_id,
+        20,
+        product_id,
         1, 1, 0
     );
 }
