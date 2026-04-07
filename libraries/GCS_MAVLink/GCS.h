@@ -395,6 +395,7 @@ public:
     void send_generator_status() const;
 
     void send_wk_selfcheck_state();
+    void send_wk_heartabat_ext_new_rule();
 #if AP_WINCH_ENABLED
     virtual void send_winch_status() const {};
 #endif
