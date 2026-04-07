@@ -554,15 +554,17 @@ void GCS_MAVLINK::send_wk_selfcheck_state()
 
 void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
 {
+    const uint8_t empty_str[1] = {0};
+    
     mavlink_msg_wk_heartbeat_ext_new_rule_send(
         chan,
         MAV_TYPE_QUADROTOR, 
         MAV_AUTOPILOT_ARDUPILOTMEGA,
         MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-        0,0,MAVLINK_VERSION,0,
-        71,0,0,0,
-        "",0,"",
-        1,1,0
+        0, 0, MAVLINK_VERSION, 0,
+        71, 0, 0, 0,
+        empty_str, 0, empty_str,
+        1, 1, 0
     );
 }
 
