@@ -559,8 +559,8 @@ void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
         MAV_TYPE_QUADROTOR, 
         MAV_AUTOPILOT_ARDUPILOTMEGA,
         MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-        0,0,0,
-        71,0,MAVLINK_VERSION,0,
+        0,0,MAVLINK_VERSION,0,
+        71,0,0,0,
         "",0,"",
         1,1,0
     );
