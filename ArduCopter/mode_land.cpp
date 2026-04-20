@@ -127,7 +127,7 @@ void ModeLand::gps_run()
     if (copter.ap.land_complete && motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
         copter.arming.disarm(AP_Arming::Method::LANDED);
 
-        if (copter.get_mode() == Mode::Number::LAND) {
+        if (copter.flightmode == &copter.mode_land) {
             copter.set_mode(Mode::Number::LOITER, ModeReason::LAND_COMPLETE);
         }
     }
