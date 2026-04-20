@@ -552,7 +552,7 @@ void GCS_MAVLINK::send_wk_selfcheck_state()
     );
 }
 
-void GCS_MAVLINK::send_wk_heartbeat_ext_new_rule()
+void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
 {
     uint8_t empty_user_name[32] = {0};
     uint8_t product_id[30] = "WKAU8888888888888888";
