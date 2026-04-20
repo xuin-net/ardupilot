@@ -557,17 +557,15 @@ void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
     uint8_t empty_user_name[32] = {0};
     uint8_t product_id[30] = "WKAU8888888888888888";
 
-    // ArduPilot 原生方式获取 base_mode（已包含 armed 状态）
-    uint8_t base_mode = base_mode();
+    uint8_t base_mode = MAV_MODE_FLAG_CUSTOM_MODE_ENABLED;
+    if (AP::arming().is_armed()) {
+        base_mode |= MAV_MODE_FLAG_SAFETY_ARMED;
+    }
 
-    // ArduPilot 原生方式获取 custom_mode（飞行模式）
     uint32_t custom_mode = gcs().custom_mode();
-
-    // 产品激活状态（自研飞控中为 product_params_ext.activated，当前写死为已激活）
-    // 如果你已迁移 product_params_ext，可替换为 product_params_ext.activated
+    
     uint8_t activated = 1;
 
-    // 发送（参数顺序与你原来的调用完全一致）
     mavlink_msg_wk_heartbeat_ext_new_rule_send(
         chan,
         MAV_TYPE_QUADROTOR, 
