@@ -126,10 +126,6 @@ void ModeLand::gps_run()
     // disarm when the landing detector says we've landed
     if (copter.ap.land_complete && motors->get_spool_state() == AP_Motors::SpoolState::GROUND_IDLE) {
         copter.arming.disarm(AP_Arming::Method::LANDED);
-
-        if (copter.flightmode == &copter.mode_land) {
-            copter.set_mode(Mode::Number::LOITER, ModeReason::UNKNOWN);
-        }
     }
 
     // Land State Machine Determination
