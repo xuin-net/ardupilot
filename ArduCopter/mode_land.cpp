@@ -128,7 +128,7 @@ void ModeLand::gps_run()
         copter.arming.disarm(AP_Arming::Method::LANDED);
 
         if (copter.flightmode == &copter.mode_land) {
-            copter.set_mode(Mode::Number::LOITER, ModeReason::LAND_COMPLETE);
+            copter.set_mode(Mode::Number::LOITER, ModeReason::UNKNOWN);
         }
     }
 
