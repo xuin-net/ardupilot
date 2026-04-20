@@ -563,21 +563,22 @@ void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
     }
 
     uint32_t custom_mode = gcs().custom_mode();
-    
-    uint8_t activated = 1;
+
+    uint8_t activated = 1; 
 
     mavlink_msg_wk_heartbeat_ext_new_rule_send(
         chan,
         MAV_TYPE_QUADROTOR, 
         MAV_AUTOPILOT_ARDUPILOTMEGA,
         base_mode,                  
-        custom_mode,               
+        custom_mode,                
         0,                          // system_status
         MAVLINK_VERSION,
+        0,                          
         activated,                  
-        0,                          // active_timestamps
-        0,                          
-        0,                          
+        0,                          // active_timestamps）
+        0,                          // bound
+        0,                          // locked
         empty_user_name,
         20,
         product_id,
