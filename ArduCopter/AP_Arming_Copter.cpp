@@ -850,6 +850,13 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
     // Possibly save auto tuned parameters
     copter.mode_autotune.autotune.disarmed(copter.flightmode == &copter.mode_autotune);
 #endif
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
+    // 使用你当前正在用的 send_arm_disarm_statustext（SITL 专用）
+    char method_msg[64];
+    snprintf(method_msg, sizeof(method_msg), "Disarm called with method = %d (DISARMDELAY=9)", (int)method);
+    send_arm_disarm_statustext(method_msg);
+#endif
     
     if (method == AP_Arming::Method::LANDED 
         || method == AP_Arming::Method::MISSIONEXIT
