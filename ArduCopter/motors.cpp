@@ -48,26 +48,20 @@ void Copter::auto_disarm_check()
         //     // Reset timer whenever throttle is not low or vehicle is not landed.
         //     auto_disarm_begin = tnow_ms;
         // }
-        if (!ap.land_complete) {
-            // 如果没落地，就一直重置计时器，不让它进入下面的闭锁判断
-            auto_disarm_begin = tnow_ms;
-        } else {
-            // 2. 飞机已经落地
-            if (flightmode->has_manual_throttle()) {
-                // A. 处于手动飞行模式 (如 Stabilize, AltHold, Loiter)
-                if (thr_low) {
-                    // 油门拉到了最低，强制闭锁延迟设为 1 秒 (1000毫秒)
-                    disarm_delay_ms = 1000;
-                } else {
-                    // 油门没有拉到最低，重置计时器。
-                    // 这样可以确保必须是【连续 1 秒】油门最低才会触发闭锁
-                    auto_disarm_begin = tnow_ms;
-                }
+        if (flightmode->has_manual_throttle()) {
+            if (thr_low) {
+                // 油门拉到底 → 强制1秒闭锁
+                disarm_delay_ms = 1000;
             } else {
-                // B. 处于自动飞行模式 (如 RTL, LAND, AUTO 等)
-                // 不需要管油门杆位，直接走默认的降落闭锁时间 (默认通常是 2 秒)
-                // 这里不重置计时器，让 tnow_ms - auto_disarm_begin 正常累加
+                // 油门没到底 → 立即重置计时器
+                auto_disarm_begin = tnow_ms;
             }
+        } else {
+            // 自动模式（RTL/LAND/AUTO等）：保留原有保护，仍需要 land_complete 才允许计时
+            if (!ap.land_complete) {
+                auto_disarm_begin = tnow_ms;
+            }
+            // 已落地则正常走 g.disarm_delay 的默认时间（通常2秒）
         }
     }
 
@@ -77,8 +71,14 @@ void Copter::auto_disarm_check()
         if (arming.disarm(AP_Arming::Method::DISARMDELAY)) {
             // 确保飞机静止在地面时，模式自动复位
             if (flightmode->mode_number() != Mode::Number::LOITER) {
-                set_mode(Mode::Number::LOITER, ModeReason::MISSION_END);
-            }            
+                if (set_mode(Mode::Number::LOITER, ModeReason::MISSION_END)) {
+                    gcs().send_text(MAV_SEVERITY_INFO, "Auto disarm: 已自动切回 LOITER 模式");
+                } else {
+                    gcs().send_text(MAV_SEVERITY_WARNING, "Auto disarm: 尝试切 LOITER 失败！");
+                }
+            } else {
+                gcs().send_text(MAV_SEVERITY_INFO, "Auto disarm: 已处于 LOITER，无需切换");
+            }         
         }
         auto_disarm_begin = tnow_ms;
     }
