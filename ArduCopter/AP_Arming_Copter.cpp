@@ -862,7 +862,7 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
         || method == AP_Arming::Method::MISSIONEXIT
         || method == AP_Arming::Method::MAVLINK) {
         if (copter.flightmode->mode_number() != Mode::Number::LOITER) {
-            copter.set_mode(Mode::Number::LOITER, ModeReason::MISSION_END)
+            copter.set_mode(Mode::Number::LOITER, ModeReason::MISSION_END);
         }
     }
     
