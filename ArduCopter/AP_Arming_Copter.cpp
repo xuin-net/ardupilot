@@ -851,7 +851,7 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
     copter.mode_autotune.autotune.disarmed(copter.flightmode == &copter.mode_autotune);
 #endif
     
-    if (method == AP_Arming::Method::LANDED) {
+    if (method == AP_Arming::Method::LANDED || method == AP_Arming::Method::MISSIONEXIT) {
         send_arm_disarm_statustext("Arming motors=DISARMDELAY=");
 
         if (copter.flightmode->mode_number() != Mode::Number::LOITER) {
