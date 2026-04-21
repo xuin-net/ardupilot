@@ -572,17 +572,17 @@ void GCS_MAVLINK::send_wk_heartabat_ext_new_rule()
         MAV_AUTOPILOT_ARDUPILOTMEGA,
         base_mode,                  
         custom_mode,                
-        0,                          // system_status
+        0,                          
         MAVLINK_VERSION,
         0,                          
-        activated,                  
-        0,                          // active_timestamps）
-        0,                          // bound
-        0,                          // locked
+        71,                  
+        0,                         
+        0,                          
+        0,                         
         empty_user_name,
         20,
         product_id,
-        1, 1, 0                     // product_type / subtype / version
+        activated, 1, 0                    
     );
 }
 
