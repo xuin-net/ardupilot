@@ -851,6 +851,24 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
     copter.mode_autotune.autotune.disarmed(copter.flightmode == &copter.mode_autotune);
 #endif
 
+    if (method == AP_Arming::Method::DISARMDELAY) {
+        // 每次通过自动闭锁成功后都打印当前模式（解决你之前“没有信息输出”的问题）
+        gcs().send_text(MAV_SEVERITY_INFO, 
+            "AutoDisarm: DISARMDELAY 成功！当前模式 = %u (0=STABILIZE, 2=ALT_HOLD, 5=LOITER ...)", 
+            (unsigned)copter.flightmode->mode_number());
+
+        if (copter.flightmode->mode_number() != Mode::Number::LOITER) {
+            if (copter.set_mode(Mode::Number::LOITER, ModeReason::MISSION_END)) {
+                gcs().send_text(MAV_SEVERITY_INFO, "Auto disarm: 已成功自动切回 LOITER 模式");
+            } else {
+                gcs().send_text(MAV_SEVERITY_WARNING, "Auto disarm: 切 LOITER 失败！（当前模式仍为 %u）", 
+                    (unsigned)copter.flightmode->mode_number());
+            }
+        } else {
+            gcs().send_text(MAV_SEVERITY_INFO, "Auto disarm: 已处于 LOITER，无需切换");
+        }
+    }
+    
     return true;
 }
 
