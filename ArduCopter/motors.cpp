@@ -50,52 +50,20 @@ void Copter::auto_disarm_check()
         // }
         if (flightmode->has_manual_throttle()) {
             if (thr_low) {
-                // 油门拉到底 → 强制1秒闭锁
-                gcs().send_text(MAV_SEVERITY_INFO, "油门拉到底 → 强制1秒闭锁");
                 disarm_delay_ms = 1000;
             } else {
-                gcs().send_text(MAV_SEVERITY_INFO, "油门没到底 → 立即重置计时器");
-                // 油门没到底 → 立即重置计时器
                 auto_disarm_begin = tnow_ms;
             }
         } else {
-            // 自动模式（RTL/LAND/AUTO等）：保留原有保护，仍需要 land_complete 才允许计时
             if (!ap.land_complete) {
                 auto_disarm_begin = tnow_ms;
             }
-            // 已落地则正常走 g.disarm_delay 的默认时间（通常2秒）
         }
     }
 
     // disarm once timer expires
     if ((tnow_ms-auto_disarm_begin) >= disarm_delay_ms) {
-        // 尝试执行闭锁，并判断是否闭锁成功
-        bool disarm_success = arming.disarm(AP_Arming::Method::DISARMDELAY);
-    
-        // ==================== 新增：打印当前模式（放在你指定的注释下面） ====================
-        // 确保飞机静止在地面时，模式自动复位
-        gcs().send_text(MAV_SEVERITY_INFO, 
-            "AutoDisarm: 当前模式 = %u (0=STABILIZE, 2=ALT_HOLD, 5=LOITER, 9=RTL, 16=LAND ...)", 
-            (unsigned)flightmode->mode_number());
-        // ==================== 新增结束 ====================
-    
-        if (disarm_success) {
-            if (flightmode->mode_number() != Mode::Number::LOITER) {
-                if (set_mode(Mode::Number::LOITER, ModeReason::MISSION_END)) {
-                    gcs().send_text(MAV_SEVERITY_INFO, "Auto disarm: 已成功切回 LOITER 模式");
-                } else {
-                    gcs().send_text(MAV_SEVERITY_WARNING, "Auto disarm: 尝试切 LOITER 失败！（当前模式仍为 %u）", 
-                        (unsigned)flightmode->mode_number());
-                }
-            } else {
-                gcs().send_text(MAV_SEVERITY_INFO, "Auto disarm: 已处于 LOITER，无需切换");
-            }
-        } else {
-            // 如果 disarms 失败，也打印信息（这是你目前“没有信息输出”的最可能原因）
-            gcs().send_text(MAV_SEVERITY_WARNING, 
-                "Auto disarm: arming.disarm() 调用失败！当前模式 = %u", 
-                (unsigned)flightmode->mode_number());
-        }
+        arming.disarm(AP_Arming::Method::DISARMDELAY);
         auto_disarm_begin = tnow_ms;
     }
 }
