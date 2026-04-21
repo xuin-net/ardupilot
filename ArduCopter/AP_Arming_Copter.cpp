@@ -858,7 +858,7 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
     send_arm_disarm_statustext(method_msg);
 #endif
     
-    if (method == AP_Arming::Method::DISARMDELAY) {
+    if (method == AP_Arming::Method::LANDED) {
         // 每次通过自动闭锁成功后都打印当前模式（解决你之前“没有信息输出”的问题）
         send_arm_disarm_statustext("Arming motors=DISARMDELAY=");
 
