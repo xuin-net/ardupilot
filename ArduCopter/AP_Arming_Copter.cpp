@@ -850,26 +850,12 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
     // Possibly save auto tuned parameters
     copter.mode_autotune.autotune.disarmed(copter.flightmode == &copter.mode_autotune);
 #endif
-
-#if CONFIG_HAL_BOARD == HAL_BOARD_SITL
-    // 使用你当前正在用的 send_arm_disarm_statustext（SITL 专用）
-    char method_msg[64];
-    snprintf(method_msg, sizeof(method_msg), "Disarm called with method = %d (DISARMDELAY=9)", (int)method);
-    send_arm_disarm_statustext(method_msg);
-#endif
     
     if (method == AP_Arming::Method::LANDED) {
-        // 每次通过自动闭锁成功后都打印当前模式（解决你之前“没有信息输出”的问题）
         send_arm_disarm_statustext("Arming motors=DISARMDELAY=");
 
         if (copter.flightmode->mode_number() != Mode::Number::LOITER) {
-            if (copter.set_mode(Mode::Number::LOITER, ModeReason::MISSION_END)) {
-                send_arm_disarm_statustext("Arming motors=SET=LOITER=");
-            } else {
-                send_arm_disarm_statustext("Arming motors=DISSET=LOITER=");
-            }
-        } else {
-            send_arm_disarm_statustext("Arming motors=IS=LOITER=");
+            copter.set_mode(Mode::Number::LOITER, ModeReason::MISSION_END)
         }
     }
     
