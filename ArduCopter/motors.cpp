@@ -13,6 +13,33 @@ void Copter::auto_disarm_check()
     uint32_t tnow_ms = millis();
     uint32_t disarm_delay_ms = 1000*constrain_int16(g.disarm_delay, 0, INT8_MAX);
 
+    // ==================== 超级调试打印（每0.5秒打印一次，避免刷屏） ====================
+    static uint32_t last_debug_print = 0;
+    if (tnow_ms - last_debug_print > 500) {
+        bool is_manual = flightmode->has_manual_throttle();
+        bool thr_low = false;
+        if (is_manual || !(g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK)) {
+            thr_low = ap.throttle_zero;
+        } else {
+            float deadband_top = get_throttle_mid() + g.throttle_deadzone;
+            thr_low = channel_throttle->get_control_in() <= deadband_top;
+        }
+
+        int32_t timer_ms = (tnow_ms > auto_disarm_begin) ? (tnow_ms - auto_disarm_begin) : 0;
+
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "AutoDisarm DEBUG | Mode=%u | Manual=%d | thr_low=%d | land_complete=%d | timer=%dms | armed=%d",
+            (unsigned)flightmode->mode_number(),
+            is_manual,
+            thr_low,
+            ap.land_complete,
+            timer_ms,
+            motors->armed());
+
+        last_debug_print = tnow_ms;
+    }
+    // ==================== 调试打印结束 ====================
+
     // Reset timer and exit if disarmed, auto-disarm disabled, or in THROW mode.
     if (!motors->armed() || disarm_delay_ms == 0 || flightmode->mode_number() == Mode::Number::THROW) {
         auto_disarm_begin = tnow_ms;
@@ -26,7 +53,7 @@ void Copter::auto_disarm_check()
         return;
     }
 
-    // interlock / e-stop 情况缩短延迟（保持原逻辑）
+    // interlock / e-stop 情况缩短延迟
     if ((ap.using_interlock && !motors->get_interlock()) || SRV_Channels::get_emergency_stop()) {
 #if FRAME_CONFIG != HELI_FRAME
         disarm_delay_ms /= 2;
@@ -41,38 +68,34 @@ void Copter::auto_disarm_check()
             thr_low = channel_throttle->get_control_in() <= deadband_top;
         }
 
-        // ==================== 最终版核心修改（手动模式只看油门） ====================
+        // ==================== 手动模式核心逻辑 ====================
         if (flightmode->has_manual_throttle()) {
-            // 手动模式：**只看油门到底**，不再要求 land_complete
             if (thr_low) {
-                disarm_delay_ms = 1000;   // 强制1秒闭锁
-                // 调试打印：让你看到计时器正在累加（SITL 里每0.5秒打印一次，避免刷屏）
-                static uint32_t last_print = 0;
-                if (tnow_ms - last_print > 500) {
+                disarm_delay_ms = 1000;
+                // 额外打印剩余时间（确认计时器在走）
+                static uint32_t last_thr_print = 0;
+                if (tnow_ms - last_thr_print > 500) {
                     uint32_t remaining = disarm_delay_ms - (tnow_ms - auto_disarm_begin);
                     gcs().send_text(MAV_SEVERITY_INFO, 
-                        "AutoDisarm MANUAL: thr_low=%d, 剩余 %u ms (当前模式=%u)", 
-                        thr_low, remaining > 0 ? remaining : 0, 
+                        "AutoDisarm MANUAL: thr_low=1, 剩余 %u ms (当前模式=%u)", 
+                        remaining > 0 ? remaining : 0, 
                         (unsigned)flightmode->mode_number());
-                    last_print = tnow_ms;
+                    last_thr_print = tnow_ms;
                 }
             } else {
-                // 油门没到底 → 立即重置
                 auto_disarm_begin = tnow_ms;
             }
         } else {
-            // 自动模式（RTL/LAND/AUTO等）：保留原有安全逻辑
             if (!ap.land_complete) {
                 auto_disarm_begin = tnow_ms;
             }
         }
-        // ==================== 修改结束 ====================
     }
 
     // disarm once timer expires
     if ((tnow_ms - auto_disarm_begin) >= disarm_delay_ms) {
         if (arming.disarm(AP_Arming::Method::DISARMDELAY)) {
-            // 模式切换已在 disarm() 里处理，这里不需要重复
+            // 模式切换已在 disarm() 里处理
         }
         auto_disarm_begin = tnow_ms;
     }
