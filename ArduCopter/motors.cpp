@@ -6,67 +6,39 @@
 
 static uint32_t auto_disarm_begin;
 
-// auto_disarm_check - disarm after a configurable delay if landed and throttle is low
 void Copter::auto_disarm_check()
 {
-    uint32_t tnow_ms = millis();
-    uint32_t disarm_delay_ms = 1000*constrain_int16(g.disarm_delay, 0, INT8_MAX);
+    uint32_t tnow = millis();
+    
+    // 类静态变量：真正的持久状态
+    static uint32_t begin_time = 0;
+    static bool was_in_state = false;
 
-    // ==================== 强力调试打印（每0.5秒） ====================
-    static uint32_t last_debug_print = 0;
-    if (tnow_ms - last_debug_print > 500) {
-        bool thr_low = ap.throttle_zero;
-        int32_t timer_ms = (tnow_ms > auto_disarm_begin) ? (tnow_ms - auto_disarm_begin) : 0;
+    bool in_state = (flightmode->mode_number() == Mode::Number::LOITER) 
+                    && ap.throttle_zero 
+                    && ap.land_complete;
 
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "AutoDisarm DEBUG | Mode=%u | Loiter=%d | thr_low=%d | land_complete=%d | timer=%dms | spool_d=%d | spool_c=%d",
-            (unsigned)flightmode->mode_number(),
-            (int)(flightmode->mode_number() == Mode::Number::LOITER),
-            thr_low, ap.land_complete, timer_ms,
-            (int)motors->get_desired_spool_state(),
-            (int)motors->get_spool_state());
-
-        last_debug_print = tnow_ms;
-    }
-    // ==================== 调试结束 ====================
-
-    // 基础退出条件
-    if (!motors->armed() || disarm_delay_ms == 0 || flightmode->mode_number() == Mode::Number::THROW) {
-        auto_disarm_begin = tnow_ms;
-        return;
-    }
-
-    // ==================== 核心强力修复（针对 Loiter） ====================
-    bool is_loiter = flightmode->mode_number() == Mode::Number::LOITER;
-    bool thr_low = ap.throttle_zero;
-
-    if (is_loiter && thr_low && ap.land_complete) {
-        // Loiter + 油门到底 + 已落地 → 强制使用 1 秒闭锁，**不重置计时器**
-        disarm_delay_ms = 1000;
-
-        // 额外打印剩余时间
-        static uint32_t last_thr_print = 0;
-        if (tnow_ms - last_thr_print > 400) {
-            uint32_t elapsed = tnow_ms - auto_disarm_begin;
-            gcs().send_text(MAV_SEVERITY_INFO, 
-                "AutoDisarm LOITER FORCE: thr_low=1, 已计时 %u ms (目标 1000ms)", elapsed);
-            last_thr_print = tnow_ms;
+    if (in_state) {
+        if (!was_in_state) {
+            begin_time = tnow;  // 刚进入状态，开始计时
+            was_in_state = true;
+            gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: begin!");
+        }
+        // 已在状态，持续计时
+        uint32_t elapsed = tnow - begin_time;
+        
+        static uint32_t last_print = 0;
+        if (tnow - last_print > 400) {
+            gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: %lu/1000 ms", (unsigned long)elapsed);
+            last_print = tnow;
+        }
+        
+        if (elapsed >= 1000) {
+            arming.disarm(AP_Arming::Method::DISARMDELAY);
+            was_in_state = false;  // 准备下次
         }
     } else {
-        // 其他情况（非 Loiter 或 油门没到底） → 正常重置计时器
-        auto_disarm_begin = tnow_ms;
-    }
-    // ==================== 核心修复结束 ====================
-
-    // 执行闭锁
-    if ((tnow_ms - auto_disarm_begin) >= disarm_delay_ms) {
-        gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: 计时器达到！尝试执行 DISARMDELAY...");
-        if (arming.disarm(AP_Arming::Method::DISARMDELAY)) {
-            gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: 闭锁成功！");
-        } else {
-            gcs().send_text(MAV_SEVERITY_WARNING, "AutoDisarm: disarm() 调用失败！");
-        }
-        auto_disarm_begin = tnow_ms;
+        was_in_state = false;  // 离开状态，下次重新计时
     }
 }
 
