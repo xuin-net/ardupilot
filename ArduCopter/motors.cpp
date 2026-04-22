@@ -6,25 +6,23 @@
 
 static uint32_t auto_disarm_begin;
 
-// auto_disarm_check - disarm after a configurable delay if landed and throttle is low,
-// unless takeoff/spool-up is being requested or auto-disarm is disabled.
+// auto_disarm_check - disarm after a configurable delay if landed and throttle is low
 void Copter::auto_disarm_check()
 {
     uint32_t tnow_ms = millis();
     uint32_t disarm_delay_ms = 1000*constrain_int16(g.disarm_delay, 0, INT8_MAX);
 
-    // ==================== 调试打印（每0.5秒） ====================
+    // ==================== 强力调试打印（每0.5秒） ====================
     static uint32_t last_debug_print = 0;
     if (tnow_ms - last_debug_print > 500) {
-        bool is_loiter = flightmode->mode_number() == Mode::Number::LOITER;
-        bool thr_low = ap.throttle_zero;   // 简化，使用最直接的 throttle_zero
-
+        bool thr_low = ap.throttle_zero;
         int32_t timer_ms = (tnow_ms > auto_disarm_begin) ? (tnow_ms - auto_disarm_begin) : 0;
 
         gcs().send_text(MAV_SEVERITY_INFO,
-            "AutoDisarm DEBUG | Mode=%u | Loiter=%d | thr_low=%d | land_complete=%d | timer=%dms | spool_desired=%d | spool_current=%d",
-            (unsigned)flightmode->mode_number(), is_loiter, thr_low,
-            ap.land_complete, timer_ms,
+            "AutoDisarm DEBUG | Mode=%u | Loiter=%d | thr_low=%d | land_complete=%d | timer=%dms | spool_d=%d | spool_c=%d",
+            (unsigned)flightmode->mode_number(),
+            (int)(flightmode->mode_number() == Mode::Number::LOITER),
+            thr_low, ap.land_complete, timer_ms,
             (int)motors->get_desired_spool_state(),
             (int)motors->get_spool_state());
 
@@ -32,52 +30,41 @@ void Copter::auto_disarm_check()
     }
     // ==================== 调试结束 ====================
 
-    // Reset timer and exit if disarmed, auto-disarm disabled, or in THROW mode.
+    // 基础退出条件
     if (!motors->armed() || disarm_delay_ms == 0 || flightmode->mode_number() == Mode::Number::THROW) {
         auto_disarm_begin = tnow_ms;
         return;
     }
 
-    // ==================== 关键修复：spool 检查放宽 ====================
-    bool is_manual_or_loiter = flightmode->has_manual_throttle() || 
-                               (flightmode->mode_number() == Mode::Number::LOITER);
+    // ==================== 核心强力修复（针对 Loiter） ====================
+    bool is_loiter = flightmode->mode_number() == Mode::Number::LOITER;
+    bool thr_low = ap.throttle_zero;
 
-    if (!is_manual_or_loiter || !ap.land_complete || !ap.throttle_zero) {
-        // 非手动/Loiter 或 未落地 或 油门没到底 → 正常重置
-        if (motors->get_desired_spool_state() > AP_Motors::DesiredSpoolState::GROUND_IDLE
-            || motors->get_spool_state() > AP_Motors::SpoolState::GROUND_IDLE) {
-            auto_disarm_begin = tnow_ms;
-            return;
+    if (is_loiter && thr_low && ap.land_complete) {
+        // Loiter + 油门到底 + 已落地 → 强制使用 1 秒闭锁，**不重置计时器**
+        disarm_delay_ms = 1000;
+
+        // 额外打印剩余时间
+        static uint32_t last_thr_print = 0;
+        if (tnow_ms - last_thr_print > 400) {
+            uint32_t elapsed = tnow_ms - auto_disarm_begin;
+            gcs().send_text(MAV_SEVERITY_INFO, 
+                "AutoDisarm LOITER FORCE: thr_low=1, 已计时 %u ms (目标 1000ms)", elapsed);
+            last_thr_print = tnow_ms;
         }
-    }
-    // 如果是手动/Loiter + 已落地 + 油门到底 → **允许继续计时**，即使 spool 还没完全 idle
-    // ==================== 修复结束 ====================
-
-    // interlock / e-stop
-    if ((ap.using_interlock && !motors->get_interlock()) || SRV_Channels::get_emergency_stop()) {
-#if FRAME_CONFIG != HELI_FRAME
-        disarm_delay_ms /= 2;
-#endif
     } else {
-        bool thr_low = ap.throttle_zero;
-
-        if (is_manual_or_loiter) {
-            if (thr_low) {
-                disarm_delay_ms = 1000;
-            } else {
-                auto_disarm_begin = tnow_ms;
-            }
-        } else {
-            if (!ap.land_complete) {
-                auto_disarm_begin = tnow_ms;
-            }
-        }
+        // 其他情况（非 Loiter 或 油门没到底） → 正常重置计时器
+        auto_disarm_begin = tnow_ms;
     }
+    // ==================== 核心修复结束 ====================
 
     // 执行闭锁
     if ((tnow_ms - auto_disarm_begin) >= disarm_delay_ms) {
+        gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: 计时器达到！尝试执行 DISARMDELAY...");
         if (arming.disarm(AP_Arming::Method::DISARMDELAY)) {
-            // 切模式已在 disarm() 里处理
+            gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: 闭锁成功！");
+        } else {
+            gcs().send_text(MAV_SEVERITY_WARNING, "AutoDisarm: disarm() 调用失败！");
         }
         auto_disarm_begin = tnow_ms;
     }
