@@ -13,29 +13,24 @@ void Copter::auto_disarm_check()
     uint32_t tnow_ms = millis();
     uint32_t disarm_delay_ms = 1000*constrain_int16(g.disarm_delay, 0, INT8_MAX);
 
-    // ==================== 超级调试打印（每0.5秒一次） ====================
+    // ==================== 调试打印（每0.5秒） ====================
     static uint32_t last_debug_print = 0;
     if (tnow_ms - last_debug_print > 500) {
-        bool is_manual = flightmode->has_manual_throttle();
         bool is_loiter = flightmode->mode_number() == Mode::Number::LOITER;
-        bool thr_low = false;
-        if (is_manual || ! (g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK)) {
-            thr_low = ap.throttle_zero;
-        } else {
-            float deadband_top = get_throttle_mid() + g.throttle_deadzone;
-            thr_low = channel_throttle->get_control_in() <= deadband_top;
-        }
+        bool thr_low = ap.throttle_zero;   // 简化，使用最直接的 throttle_zero
 
         int32_t timer_ms = (tnow_ms > auto_disarm_begin) ? (tnow_ms - auto_disarm_begin) : 0;
 
         gcs().send_text(MAV_SEVERITY_INFO,
-            "AutoDisarm DEBUG | Mode=%u | Manual=%d | Loiter=%d | thr_low=%d | land_complete=%d | timer=%dms | armed=%d",
-            (unsigned)flightmode->mode_number(), is_manual, is_loiter,
-            thr_low, ap.land_complete, timer_ms, motors->armed());
+            "AutoDisarm DEBUG | Mode=%u | Loiter=%d | thr_low=%d | land_complete=%d | timer=%dms | spool_desired=%d | spool_current=%d",
+            (unsigned)flightmode->mode_number(), is_loiter, thr_low,
+            ap.land_complete, timer_ms,
+            (int)motors->get_desired_spool_state(),
+            (int)motors->get_spool_state());
 
         last_debug_print = tnow_ms;
     }
-    // ==================== 调试打印结束 ====================
+    // ==================== 调试结束 ====================
 
     // Reset timer and exit if disarmed, auto-disarm disabled, or in THROW mode.
     if (!motors->armed() || disarm_delay_ms == 0 || flightmode->mode_number() == Mode::Number::THROW) {
@@ -43,58 +38,46 @@ void Copter::auto_disarm_check()
         return;
     }
 
-    // If takeoff/spool-up is being requested, inhibit auto-disarm
-    if (motors->get_desired_spool_state() > AP_Motors::DesiredSpoolState::GROUND_IDLE
-        || motors->get_spool_state() > AP_Motors::SpoolState::GROUND_IDLE) {
-        auto_disarm_begin = tnow_ms;
-        return;
-    }
+    // ==================== 关键修复：spool 检查放宽 ====================
+    bool is_manual_or_loiter = flightmode->has_manual_throttle() || 
+                               (flightmode->mode_number() == Mode::Number::LOITER);
 
-    // interlock / e-stop 情况缩短延迟
+    if (!is_manual_or_loiter || !ap.land_complete || !ap.throttle_zero) {
+        // 非手动/Loiter 或 未落地 或 油门没到底 → 正常重置
+        if (motors->get_desired_spool_state() > AP_Motors::DesiredSpoolState::GROUND_IDLE
+            || motors->get_spool_state() > AP_Motors::SpoolState::GROUND_IDLE) {
+            auto_disarm_begin = tnow_ms;
+            return;
+        }
+    }
+    // 如果是手动/Loiter + 已落地 + 油门到底 → **允许继续计时**，即使 spool 还没完全 idle
+    // ==================== 修复结束 ====================
+
+    // interlock / e-stop
     if ((ap.using_interlock && !motors->get_interlock()) || SRV_Channels::get_emergency_stop()) {
 #if FRAME_CONFIG != HELI_FRAME
         disarm_delay_ms /= 2;
 #endif
     } else {
-        bool sprung_throttle_stick = (g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK) != 0;
-        bool thr_low;
-        if (flightmode->has_manual_throttle() || !sprung_throttle_stick) {
-            thr_low = ap.throttle_zero;
-        } else {
-            float deadband_top = get_throttle_mid() + g.throttle_deadzone;
-            thr_low = channel_throttle->get_control_in() <= deadband_top;
-        }
+        bool thr_low = ap.throttle_zero;
 
-        // ==================== 最终修复：把 LOITER 也当成手动模式处理 ====================
-        if (flightmode->has_manual_throttle() || flightmode->mode_number() == Mode::Number::LOITER) {
-            // 手动模式 或 Loiter：只看油门到底，强制1秒闭锁
+        if (is_manual_or_loiter) {
             if (thr_low) {
                 disarm_delay_ms = 1000;
-                static uint32_t last_thr_print = 0;
-                if (tnow_ms - last_thr_print > 500) {
-                    uint32_t remaining = disarm_delay_ms - (tnow_ms - auto_disarm_begin);
-                    gcs().send_text(MAV_SEVERITY_INFO, 
-                        "AutoDisarm MANUAL/LOITER: thr_low=1, 剩余 %u ms (当前模式=%u)", 
-                        remaining > 0 ? remaining : 0, 
-                        (unsigned)flightmode->mode_number());
-                    last_thr_print = tnow_ms;
-                }
             } else {
                 auto_disarm_begin = tnow_ms;
             }
         } else {
-            // 其他自动模式（RTL/AUTO等）保留原有保护
             if (!ap.land_complete) {
                 auto_disarm_begin = tnow_ms;
             }
         }
-        // ==================== 修复结束 ====================
     }
 
-    // disarm once timer expires
+    // 执行闭锁
     if ((tnow_ms - auto_disarm_begin) >= disarm_delay_ms) {
         if (arming.disarm(AP_Arming::Method::DISARMDELAY)) {
-            // 模式切换已在 disarm() 里处理
+            // 切模式已在 disarm() 里处理
         }
         auto_disarm_begin = tnow_ms;
     }
