@@ -4,8 +4,6 @@
 #define DISARM_DELAY            20  // called at 10hz so 2 seconds
 #define LOST_VEHICLE_DELAY      10  // called at 10hz so 1 second
 
-static uint32_t auto_disarm_begin;
-
 void Copter::auto_disarm_check()
 {
     uint32_t tnow = millis();
