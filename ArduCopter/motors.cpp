@@ -13,12 +13,13 @@ void Copter::auto_disarm_check()
     uint32_t tnow_ms = millis();
     uint32_t disarm_delay_ms = 1000*constrain_int16(g.disarm_delay, 0, INT8_MAX);
 
-    // ==================== 超级调试打印（每0.5秒打印一次，避免刷屏） ====================
+    // ==================== 超级调试打印（每0.5秒一次） ====================
     static uint32_t last_debug_print = 0;
     if (tnow_ms - last_debug_print > 500) {
         bool is_manual = flightmode->has_manual_throttle();
+        bool is_loiter = flightmode->mode_number() == Mode::Number::LOITER;
         bool thr_low = false;
-        if (is_manual || !(g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK)) {
+        if (is_manual || ! (g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK)) {
             thr_low = ap.throttle_zero;
         } else {
             float deadband_top = get_throttle_mid() + g.throttle_deadzone;
@@ -28,13 +29,9 @@ void Copter::auto_disarm_check()
         int32_t timer_ms = (tnow_ms > auto_disarm_begin) ? (tnow_ms - auto_disarm_begin) : 0;
 
         gcs().send_text(MAV_SEVERITY_INFO,
-            "AutoDisarm DEBUG | Mode=%u | Manual=%d | thr_low=%d | land_complete=%d | timer=%dms | armed=%d",
-            (unsigned)flightmode->mode_number(),
-            is_manual,
-            thr_low,
-            ap.land_complete,
-            timer_ms,
-            motors->armed());
+            "AutoDisarm DEBUG | Mode=%u | Manual=%d | Loiter=%d | thr_low=%d | land_complete=%d | timer=%dms | armed=%d",
+            (unsigned)flightmode->mode_number(), is_manual, is_loiter,
+            thr_low, ap.land_complete, timer_ms, motors->armed());
 
         last_debug_print = tnow_ms;
     }
@@ -68,16 +65,16 @@ void Copter::auto_disarm_check()
             thr_low = channel_throttle->get_control_in() <= deadband_top;
         }
 
-        // ==================== 手动模式核心逻辑 ====================
-        if (flightmode->has_manual_throttle()) {
+        // ==================== 最终修复：把 LOITER 也当成手动模式处理 ====================
+        if (flightmode->has_manual_throttle() || flightmode->mode_number() == Mode::Number::LOITER) {
+            // 手动模式 或 Loiter：只看油门到底，强制1秒闭锁
             if (thr_low) {
                 disarm_delay_ms = 1000;
-                // 额外打印剩余时间（确认计时器在走）
                 static uint32_t last_thr_print = 0;
                 if (tnow_ms - last_thr_print > 500) {
                     uint32_t remaining = disarm_delay_ms - (tnow_ms - auto_disarm_begin);
                     gcs().send_text(MAV_SEVERITY_INFO, 
-                        "AutoDisarm MANUAL: thr_low=1, 剩余 %u ms (当前模式=%u)", 
+                        "AutoDisarm MANUAL/LOITER: thr_low=1, 剩余 %u ms (当前模式=%u)", 
                         remaining > 0 ? remaining : 0, 
                         (unsigned)flightmode->mode_number());
                     last_thr_print = tnow_ms;
@@ -86,10 +83,12 @@ void Copter::auto_disarm_check()
                 auto_disarm_begin = tnow_ms;
             }
         } else {
+            // 其他自动模式（RTL/AUTO等）保留原有保护
             if (!ap.land_complete) {
                 auto_disarm_begin = tnow_ms;
             }
         }
+        // ==================== 修复结束 ====================
     }
 
     // disarm once timer expires
