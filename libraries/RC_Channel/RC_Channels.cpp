@@ -364,66 +364,60 @@ RC_Channel &RC_Channels::get_lateral_channel() const
 
 /*
   check for pilot input on rudder stick for arming/disarming
+  修改版：支持经典 内八 + 外八 双摇杆手势（左右摇杆同时动作）
+  内八 / 外八 都支持解锁和闭锁
 */
 void RC_Channels::rudder_arm_disarm_check()
 {
-    // run no more code if arm/disarm via rudder input channel is
-    // completely disabled.  Further checks using this parameter are
-    // done below.
+    // 如果用户关闭了摇杆解锁/闭锁功能，则退出
     if (AP::arming().get_rudder_arming_type() == AP_Arming::RudderArming::IS_DISABLED) {
         return;
     }
 
-    const RC_Channel *channel = get_arming_channel();
-    if (channel == nullptr) {
+    const RC_Channel *throttle_ch = rc().get_throttle_channel();
+    const RC_Channel *yaw_ch      = get_yaw_channel();      // 左摇杆横向
+    const RC_Channel *roll_ch     = get_roll_channel();     // 右摇杆横向
+
+    if (throttle_ch == nullptr || yaw_ch == nullptr || roll_ch == nullptr) {
         return;
     }
 
-    const auto control_in = channel->get_control_in();
-    const auto abs_control_in = abs(control_in);
+    const bool thr_low     = throttle_ch->get_control_in() == 0;   // 油门到底
+    const int16_t yaw_in   = yaw_ch->get_control_in();             // 左摇杆横向
+    const int16_t roll_in  = roll_ch->get_control_in();            // 右摇杆横向
 
-    if (abs_control_in == 0) {
-        have_seen_neutral_rudder = true;
-    }
+    // 判断是否做出完整八字手势
+    const bool is_outer_eight = thr_low && (yaw_in <= -4000) && (roll_in >=  4000);  // 外八：左下 + 右下
+    const bool is_inner_eight = thr_low && (yaw_in >=  4000) && (roll_in <= -4000);  // 内八：右下 + 左下
 
-    if (abs_control_in <= 4000) {
-        // not trying to (or no longer trying to) arm or disarm
-        rudder_arm_timer = 0;
-        return;
-    }
-
-    // enforce correct stick gesture for arming (but not disarming):
-    if (arming_check_throttle() && control_in > 4000) {
-        // only permit arming if the vehicle isn't being commanded to
-        // move via RC input
-        const auto &c = rc().get_throttle_channel();
-        if (c.get_control_in() != 0) {
-            rudder_arm_timer = 0;
-            return;
-        }
-    }
+    const bool is_eight_gesture = is_outer_eight || is_inner_eight;
 
     const uint32_t now = AP_HAL::millis();
-    if (rudder_arm_timer == 0) {
-        // first time we've seen the attempt
-        rudder_arm_timer = now;
-        return;
-    }
 
-    if (now - rudder_arm_timer < 3000) {
-        // not time yet....
-        return;
-    }
-
-    // time to try to arm or disarm:
-    rudder_arm_timer = 0;
-    if (control_in > 4000) {
-        AP::arming().arm(AP_Arming::Method::RUDDER);
-        have_seen_neutral_rudder = false;
-    } else {
-        if (AP::arming().get_rudder_arming_type() == AP_Arming::RudderArming::ARMDISARM) {
-            AP::arming().disarm(AP_Arming::Method::RUDDER);
+    if (is_eight_gesture) {
+        if (rudder_arm_timer == 0) {
+            rudder_arm_timer = now;   // 开始计时
+            return;
         }
+
+        // 保持 1 秒后触发（可自行修改数值）
+        if (now - rudder_arm_timer >= 1000) {
+            if (!motors->armed()) {
+                // 未解锁 → 执行解锁
+                if (AP::arming().arm(AP_Arming::Method::RUDDER)) {
+                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八解锁成功！");
+                }
+            } else {
+                // 已解锁 → 执行闭锁
+                if (AP::arming().disarm(AP_Arming::Method::RUDDER)) {
+                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八闭锁成功！");
+                }
+            }
+            rudder_arm_timer = 0;
+        }
+    } else {
+        // 手势不完整，立即重置计时器
+        rudder_arm_timer = 0;
     }
 }
 
