@@ -364,31 +364,26 @@ RC_Channel &RC_Channels::get_lateral_channel() const
 
 /*
   check for pilot input on rudder stick for arming/disarming
-  修改版：支持经典 内八 + 外八 双摇杆手势（左右摇杆同时动作）
-  内八 / 外八 都支持解锁和闭锁
+  支持经典 内八（左摇杆右下 + 右摇杆左下） + 外八（左摇杆左下 + 右摇杆右下）
+  任意一个手势都支持：已解锁→闭锁，未解锁→解锁
 */
 void RC_Channels::rudder_arm_disarm_check()
 {
-    // 如果用户关闭了摇杆解锁/闭锁功能，则退出
     if (AP::arming().get_rudder_arming_type() == AP_Arming::RudderArming::IS_DISABLED) {
         return;
     }
 
-    const RC_Channel *throttle_ch = rc().get_throttle_channel();
-    const RC_Channel *yaw_ch      = get_yaw_channel();      // 左摇杆横向
-    const RC_Channel *roll_ch     = get_roll_channel();     // 右摇杆横向
+    const RC_Channel &throttle_ch = rc().get_throttle_channel();
+    const RC_Channel &yaw_ch      = get_yaw_channel();      // 左摇杆横向（Yaw）
+    const RC_Channel &roll_ch     = get_roll_channel();     // 右摇杆横向（Roll）
 
-    if (throttle_ch == nullptr || yaw_ch == nullptr || roll_ch == nullptr) {
-        return;
-    }
+    const bool thr_low    = throttle_ch.get_control_in() == 0;   // 油门到底
+    const int16_t yaw_in  = yaw_ch.get_control_in();
+    const int16_t roll_in = roll_ch.get_control_in();
 
-    const bool thr_low     = throttle_ch->get_control_in() == 0;   // 油门到底
-    const int16_t yaw_in   = yaw_ch->get_control_in();             // 左摇杆横向
-    const int16_t roll_in  = roll_ch->get_control_in();            // 右摇杆横向
-
-    // 判断是否做出完整八字手势
-    const bool is_outer_eight = thr_low && (yaw_in <= -4000) && (roll_in >=  4000);  // 外八：左下 + 右下
-    const bool is_inner_eight = thr_low && (yaw_in >=  4000) && (roll_in <= -4000);  // 内八：右下 + 左下
+    // 判断手势
+    const bool is_outer_eight = thr_low && (yaw_in  <= -4000) && (roll_in >=  4000);  // 外八：Yaw左 + Roll右
+    const bool is_inner_eight = thr_low && (yaw_in  >=  4000) && (roll_in <= -4000);  // 内八：Yaw右 + Roll左
 
     const bool is_eight_gesture = is_outer_eight || is_inner_eight;
 
@@ -400,18 +395,13 @@ void RC_Channels::rudder_arm_disarm_check()
             return;
         }
 
-        // 保持 1 秒后触发（可自行修改数值）
+        // 保持1秒后触发
         if (now - rudder_arm_timer >= 1000) {
-            if (!motors->armed()) {
-                // 未解锁 → 执行解锁
-                if (AP::arming().arm(AP_Arming::Method::RUDDER)) {
-                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八解锁成功！");
-                }
+            if (!copter.motors->armed()) {
+                // 未解锁 → 解锁
+                AP::arming().arm(AP_Arming::Method::RUDDER)
             } else {
-                // 已解锁 → 执行闭锁
-                if (AP::arming().disarm(AP_Arming::Method::RUDDER)) {
-                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八闭锁成功！");
-                }
+                AP::arming().disarm(AP_Arming::Method::RUDDER)
             }
             rudder_arm_timer = 0;
         }
