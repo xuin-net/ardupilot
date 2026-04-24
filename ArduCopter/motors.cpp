@@ -6,6 +6,19 @@
 
 void Copter::auto_disarm_check()
 {
+    if (ap.disarm_delay_blocked_by_pilot) {
+        // 检查是否已经真实起飞，若离地则解除阻止
+        if (!ap.land_complete) {
+            // 一旦离地，说明驾驶员已控制飞机，可安全恢复自动闭锁功能
+            ap.disarm_delay_blocked_by_pilot = false;
+        } else {
+            // 仍在地面，阻止自动闭锁，并重置内部状态
+            begin_time = 0;
+            was_in_state = false;
+            return;
+        }
+    }
+    
     uint32_t tnow = millis();
     
     // 类静态变量：真正的持久状态
