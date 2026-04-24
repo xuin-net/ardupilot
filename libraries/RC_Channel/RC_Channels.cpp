@@ -403,10 +403,12 @@ void RC_Channels::rudder_arm_disarm_check()
         }
 
         if (now - rudder_arm_timer >= 1000) {        // 手势保持1秒触发
+            bool success = false;
+
             if (!AP::arming().is_armed()) {
-                AP::arming().arm(AP_Arming::Method::RUDDER);
+                success = AP::arming().arm(AP_Arming::Method::RUDDER);
             } else {
-                AP::arming().disarm(AP_Arming::Method::RUDDER);
+                success = AP::arming().disarm(AP_Arming::Method::RUDDER);
             }
 
             if (success) {
