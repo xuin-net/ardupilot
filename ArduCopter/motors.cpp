@@ -6,6 +6,12 @@
 
 void Copter::auto_disarm_check()
 {
+    uint32_t tnow = millis();
+    
+    // 类静态变量：真正的持久状态
+    static uint32_t begin_time = 0;
+    static bool was_in_state = false;
+    
     if (disarm_delay_blocked_by_pilot) {
         // 检查是否已经真实起飞，若离地则解除阻止
         if (!ap.land_complete) {
@@ -18,12 +24,6 @@ void Copter::auto_disarm_check()
             return;
         }
     }
-    
-    uint32_t tnow = millis();
-    
-    // 类静态变量：真正的持久状态
-    static uint32_t begin_time = 0;
-    static bool was_in_state = false;
 
     bool in_state = (flightmode->mode_number() == Mode::Number::LOITER) 
                     && ap.throttle_zero 
