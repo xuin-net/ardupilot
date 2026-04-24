@@ -369,21 +369,22 @@ RC_Channel &RC_Channels::get_lateral_channel() const
 */
 void RC_Channels::rudder_arm_disarm_check()
 {
+    // 如果用户关闭了摇杆解锁/闭锁功能，则退出
     if (AP::arming().get_rudder_arming_type() == AP_Arming::RudderArming::IS_DISABLED) {
         return;
     }
 
     const RC_Channel &throttle_ch = rc().get_throttle_channel();
-    const RC_Channel &yaw_ch      = get_yaw_channel();      // 左摇杆横向（Yaw）
-    const RC_Channel &roll_ch     = get_roll_channel();     // 右摇杆横向（Roll）
+    const RC_Channel &yaw_ch      = get_yaw_channel();
+    const RC_Channel &roll_ch     = get_roll_channel();
 
     const bool thr_low    = throttle_ch.get_control_in() == 0;   // 油门到底
     const int16_t yaw_in  = yaw_ch.get_control_in();
     const int16_t roll_in = roll_ch.get_control_in();
 
     // 判断手势
-    const bool is_outer_eight = thr_low && (yaw_in  <= -4000) && (roll_in >=  4000);  // 外八：Yaw左 + Roll右
-    const bool is_inner_eight = thr_low && (yaw_in  >=  4000) && (roll_in <= -4000);  // 内八：Yaw右 + Roll左
+    const bool is_outer_eight = thr_low && (yaw_in  <= -4000) && (roll_in >=  4000);  // 外八
+    const bool is_inner_eight = thr_low && (yaw_in  >=  4000) && (roll_in <= -4000);  // 内八
 
     const bool is_eight_gesture = is_outer_eight || is_inner_eight;
 
@@ -391,22 +392,23 @@ void RC_Channels::rudder_arm_disarm_check()
 
     if (is_eight_gesture) {
         if (rudder_arm_timer == 0) {
-            rudder_arm_timer = now;   // 开始计时
+            rudder_arm_timer = now;
             return;
         }
 
-        // 保持1秒后触发
-        if (now - rudder_arm_timer >= 1000) {
-            if (!copter.motors->armed()) {
-                // 未解锁 → 解锁
-                AP::arming().arm(AP_Arming::Method::RUDDER)
+        if (now - rudder_arm_timer >= 1000) {   // 保持1秒触发
+            if (!AP::arming().is_armed()) {     // 使用通用方式判断是否已解锁
+                if (AP::arming().arm(AP_Arming::Method::RUDDER)) {
+                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八解锁成功！");
+                }
             } else {
-                AP::arming().disarm(AP_Arming::Method::RUDDER)
+                if (AP::arming().disarm(AP_Arming::Method::RUDDER)) {
+                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八闭锁成功！");
+                }
             }
             rudder_arm_timer = 0;
         }
     } else {
-        // 手势不完整，立即重置计时器
         rudder_arm_timer = 0;
     }
 }
