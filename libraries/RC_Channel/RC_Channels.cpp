@@ -422,6 +422,7 @@ void RC_Channels::rudder_arm_disarm_check()
             if (success) {
                 last_action_time = now;      // 记录成功时间，启动冷却
                 gesture_released = false;    // 标记为“未释放”，必须离开手势区域后才能再次触发
+                AP::copter().disarm_delay_blocked_by_pilot = true;
             }
             rudder_arm_timer = 0;            // 重置计时器
         }
