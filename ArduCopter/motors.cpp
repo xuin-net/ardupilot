@@ -20,14 +20,12 @@ void Copter::auto_disarm_check()
         if (!was_in_state) {
             begin_time = tnow;  // 刚进入状态，开始计时
             was_in_state = true;
-            gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: begin!");
         }
         // 已在状态，持续计时
         uint32_t elapsed = tnow - begin_time;
         
         static uint32_t last_print = 0;
         if (tnow - last_print > 400) {
-            gcs().send_text(MAV_SEVERITY_INFO, "AutoDisarm: %lu/1000 ms", (unsigned long)elapsed);
             last_print = tnow;
         }
         
