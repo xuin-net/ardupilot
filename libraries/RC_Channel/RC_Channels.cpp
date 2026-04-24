@@ -398,13 +398,9 @@ void RC_Channels::rudder_arm_disarm_check()
 
         if (now - rudder_arm_timer >= 1000) {   // 保持1秒触发
             if (!AP::arming().is_armed()) {     // 使用通用方式判断是否已解锁
-                if (AP::arming().arm(AP_Arming::Method::RUDDER)) {
-                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八解锁成功！");
-                }
+                AP::arming().arm(AP_Arming::Method::RUDDER);
             } else {
-                if (AP::arming().disarm(AP_Arming::Method::RUDDER)) {
-                    gcs().send_text(MAV_SEVERITY_INFO, "✅ 摇杆内/外八闭锁成功！");
-                }
+                AP::arming().disarm(AP_Arming::Method::RUDDER);
             }
             rudder_arm_timer = 0;
         }
