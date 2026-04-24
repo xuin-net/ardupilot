@@ -1112,6 +1112,7 @@ private:
 
 public:
     void failsafe_check();      // failsafe.cpp
+    bool disarm_delay_blocked_by_pilot;
 };
 
 extern Copter copter;
