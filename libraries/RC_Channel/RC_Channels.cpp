@@ -387,22 +387,30 @@ void RC_Channels::rudder_arm_disarm_check()
 
     const uint32_t now = AP_HAL::millis();
 
-    // 新增：冷却时间（防止回中瞬间误触发），单位毫秒
-    static uint32_t last_action_time = 0;
-    const uint32_t cooldown_ms = 1500;   // 解锁/闭锁后 1.5 秒内忽略新手势
+    static uint32_t last_action_time = 0;     // 上次成功触发的时间
+    static bool gesture_released = true;      // 手势是否已释放（摇杆离开手势区域）
+
+    const uint32_t cooldown_ms = 1500;        // 动作完成后 1.5 秒冷却
 
     if (is_eight_gesture) {
-        // 如果还在冷却期，直接忽略
+        // 冷却期内不响应任何新动作
         if (now - last_action_time < cooldown_ms) {
             return;
         }
 
+        // 如果上一次动作后还没有松开摇杆，直接忽略，不开始计时
+        if (!gesture_released) {
+            return;
+        }
+
+        // 首次满足手势，记录开始计时时间
         if (rudder_arm_timer == 0) {
             rudder_arm_timer = now;
             return;
         }
 
-        if (now - rudder_arm_timer >= 1000) {        // 手势保持1秒触发
+        // 手势保持满 1 秒，触发动作
+        if (now - rudder_arm_timer >= 1000) {
             bool success = false;
 
             if (!AP::arming().is_armed()) {
@@ -412,12 +420,15 @@ void RC_Channels::rudder_arm_disarm_check()
             }
 
             if (success) {
-                last_action_time = now;     // 记录成功动作时间，进入冷却
+                last_action_time = now;      // 记录成功时间，启动冷却
+                gesture_released = false;    // 标记为“未释放”，必须离开手势区域后才能再次触发
             }
-            rudder_arm_timer = 0;
+            rudder_arm_timer = 0;            // 重置计时器
         }
     } else {
+        // 摇杆不在手势区域，重置计时器并允许下次手势
         rudder_arm_timer = 0;
+        gesture_released = true;             // 已释放，可以接受新的手势
     }
 }
 
