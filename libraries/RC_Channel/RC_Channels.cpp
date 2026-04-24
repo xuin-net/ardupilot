@@ -364,12 +364,11 @@ RC_Channel &RC_Channels::get_lateral_channel() const
 
 /*
   check for pilot input on rudder stick for arming/disarming
-  支持经典 内八（左摇杆右下 + 右摇杆左下） + 外八（左摇杆左下 + 右摇杆右下）
-  任意一个手势都支持：已解锁→闭锁，未解锁→解锁
+  支持 内八 + 外八 双摇杆手势
+  修复：解锁/闭锁后回中不会立即再次触发
 */
 void RC_Channels::rudder_arm_disarm_check()
 {
-    // 如果用户关闭了摇杆解锁/闭锁功能，则退出
     if (AP::arming().get_rudder_arming_type() == AP_Arming::RudderArming::IS_DISABLED) {
         return;
     }
@@ -378,29 +377,40 @@ void RC_Channels::rudder_arm_disarm_check()
     const RC_Channel &yaw_ch      = get_yaw_channel();
     const RC_Channel &roll_ch     = get_roll_channel();
 
-    const bool thr_low    = throttle_ch.get_control_in() == 0;   // 油门到底
+    const bool thr_low    = throttle_ch.get_control_in() == 0;
     const int16_t yaw_in  = yaw_ch.get_control_in();
     const int16_t roll_in = roll_ch.get_control_in();
 
-    // 判断手势
-    const bool is_outer_eight = thr_low && (yaw_in  <= -4000) && (roll_in >=  4000);  // 外八
-    const bool is_inner_eight = thr_low && (yaw_in  >=  4000) && (roll_in <= -4000);  // 内八
-
+    const bool is_outer_eight = thr_low && (yaw_in  <= -4000) && (roll_in >=  4000);
+    const bool is_inner_eight = thr_low && (yaw_in  >=  4000) && (roll_in <= -4000);
     const bool is_eight_gesture = is_outer_eight || is_inner_eight;
 
     const uint32_t now = AP_HAL::millis();
 
+    // 新增：冷却时间（防止回中瞬间误触发），单位毫秒
+    static uint32_t last_action_time = 0;
+    const uint32_t cooldown_ms = 1500;   // 解锁/闭锁后 1.5 秒内忽略新手势
+
     if (is_eight_gesture) {
+        // 如果还在冷却期，直接忽略
+        if (now - last_action_time < cooldown_ms) {
+            return;
+        }
+
         if (rudder_arm_timer == 0) {
             rudder_arm_timer = now;
             return;
         }
 
-        if (now - rudder_arm_timer >= 1000) {   // 保持1秒触发
-            if (!AP::arming().is_armed()) {     // 使用通用方式判断是否已解锁
+        if (now - rudder_arm_timer >= 1000) {        // 手势保持1秒触发
+            if (!AP::arming().is_armed()) {
                 AP::arming().arm(AP_Arming::Method::RUDDER);
             } else {
                 AP::arming().disarm(AP_Arming::Method::RUDDER);
+            }
+
+            if (success) {
+                last_action_time = now;     // 记录成功动作时间，进入冷却
             }
             rudder_arm_timer = 0;
         }
