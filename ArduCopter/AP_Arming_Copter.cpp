@@ -780,6 +780,11 @@ bool AP_Arming_Copter::arm(const AP_Arming::Method method, const bool do_arming_
     // assumed armed without a arming, switch. Overridden in switches.cpp
     copter.ap.armed_with_airmode_switch = false;
 
+    // 新增：如果是通过方向舵解锁，暂时阻止自动关锁（直到离地）
+    if (method == AP_Arming::Method::RUDDER) {
+        copter.disarm_delay_blocked_by_pilot = true;
+    }
+    
     // return success
     return true;
 }
@@ -789,6 +794,7 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
 {
     // return immediately if we are already disarmed
     if (!copter.motors->armed()) {
+        copter.disarm_delay_blocked_by_pilot = false; // 确保状态一致
         return true;
     }
 
@@ -865,6 +871,9 @@ bool AP_Arming_Copter::disarm(const AP_Arming::Method method, bool do_disarm_che
             copter.set_mode(Mode::Number::LOITER, ModeReason::MISSION_END);
         }
     }
+
+    // 新增：成功加锁后，恢复自动关锁功能
+    copter.disarm_delay_blocked_by_pilot = false;
     
     return true;
 }
