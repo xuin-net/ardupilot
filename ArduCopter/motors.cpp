@@ -7,47 +7,90 @@
 void Copter::auto_disarm_check()
 {
     uint32_t tnow = millis();
-    
-    // 类静态变量：真正的持久状态
+
+    // 类静态变量
     static uint32_t begin_time = 0;
     static bool was_in_state = false;
-    
+    static bool was_armed = false;           // 新增：检测刚解锁
+
+    bool now_armed = motors->armed();
+
+    // ==================== 刚解锁时激活 pilot block ====================
+    if (now_armed && !was_armed) {
+        disarm_delay_blocked_by_pilot = true;
+    }
+    was_armed = now_armed;
+
+    if (!now_armed) {
+        disarm_delay_blocked_by_pilot = false;
+        begin_time = 0;
+        was_in_state = false;
+        return;
+    }
+
+    // 保留部分原版重要检查（强烈建议保留）
+    uint32_t disarm_delay_ms = 1000 * constrain_int16(g.disarm_delay, 0, INT8_MAX);
+    if (disarm_delay_ms == 0 || flightmode->mode_number() == Mode::Number::THROW) {
+        begin_time = 0;
+        was_in_state = false;
+        return;
+    }
+
+    // 电机正在 spool up 或已不在 ground idle 时，阻止自动闭锁
+    if (motors->get_desired_spool_state() > AP_Motors::DesiredSpoolState::GROUND_IDLE ||
+        motors->get_spool_state() > AP_Motors::SpoolState::GROUND_IDLE) {
+        begin_time = 0;
+        was_in_state = false;
+        return;
+    }
+
+    // ==================== 你原来的 pilot block 逻辑 ====================
     if (disarm_delay_blocked_by_pilot) {
-        // 检查是否已经真实起飞，若离地则解除阻止
         if (!ap.land_complete) {
-            // 一旦离地，说明驾驶员已控制飞机，可安全恢复自动闭锁功能
+            // 已经真正离地过一次，解除阻止，之后就可以正常自动闭锁
             disarm_delay_blocked_by_pilot = false;
         } else {
-            // 仍在地面，阻止自动闭锁，并重置内部状态
+            // 仍在地面，持续阻止并重置计时器
             begin_time = 0;
             was_in_state = false;
             return;
         }
     }
 
-    bool in_state = (flightmode->mode_number() == Mode::Number::LOITER) 
-                    && ap.throttle_zero 
+    // ==================== 使用原版完整的低油门判断逻辑（关键修复）===================
+    bool thr_low;
+    bool sprung_throttle_stick = (g.throttle_behavior & THR_BEHAVE_FEEDBACK_FROM_MID_STICK) != 0;
+
+    if (flightmode->has_manual_throttle() || !sprung_throttle_stick) {
+        thr_low = ap.throttle_zero;
+    } else {
+        float deadband_top = get_throttle_mid() + g.throttle_deadzone;
+        thr_low = channel_throttle->get_control_in() <= deadband_top;
+    }
+
+    // 你想要的触发条件：仅在 LOITER + 低油门 + 已着陆
+    bool in_state = (flightmode->mode_number() == Mode::Number::LOITER)
+                    && thr_low
                     && ap.land_complete;
 
+    // ==================== 计时逻辑 ====================
     if (in_state) {
         if (!was_in_state) {
-            begin_time = tnow;  // 刚进入状态，开始计时
+            begin_time = tnow;      // 刚进入状态，开始计时
             was_in_state = true;
         }
-        // 已在状态，持续计时
+
         uint32_t elapsed = tnow - begin_time;
-        
-        static uint32_t last_print = 0;
-        if (tnow - last_print > 400) {
-            last_print = tnow;
-        }
-        
-        if (elapsed >= 1000) {
+
+        if (elapsed >= 1000) {      // 你想要的 1 秒
             arming.disarm(AP_Arming::Method::DISARMDELAY);
-            was_in_state = false;  // 准备下次
+            was_in_state = false;
+            begin_time = tnow;
         }
     } else {
-        was_in_state = false;  // 离开状态，下次重新计时
+        // 离开状态，重置计时器
+        was_in_state = false;
+        begin_time = 0;
     }
 }
 
